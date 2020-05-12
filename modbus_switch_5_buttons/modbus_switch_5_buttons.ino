@@ -4,21 +4,24 @@
 #include <OneButton.h>
 #include <IWatchdog.h>
 
-#define SLAVE_ID 31
+#define SLAVE_ID 32
 #define RS485_BAUDRATE 9600
 
 #define RS485_RX_PIN PA10
 #define RS485_TX_PIN PA9
 #define RS485_TX_ENABLE_PIN PA12
 
-#define INPUT1_PIN PA4
-#define INPUT2_PIN PA5
-#define THERMOSTAT_ON_PIN PA6
+#define INPUT1_PIN PA2
+#define INPUT2_PIN PA3
+#define INPUT3_PIN PA4
+#define INPUT4_PIN PA5
+#define INPUT5_PIN PA6
 
 #define OUTPUT1_PIN PB0
 #define OUTPUT2_PIN PB1
-#define THERMOSTAT_LED_PIN PA8
-#define THERMOSTAT_OUTPUT_PIN PA7
+#define OUTPUT3_PIN PB3
+#define OUTPUT4_PIN PB4
+#define OUTPUT5_PIN PB5
 
 #define I2C_SDA PB7
 #define I2C_SCL PB6
@@ -36,39 +39,39 @@
 #define HTU21D_TEMP_COEFFICIENT -0.15
 #define HTU21D_TRIGGER_HUMD_MEASURE_HOLD 0xE5
 
-const uint8_t MAX_FLOOR_TEMP = 40; //Celcius degree
-
 const uint8_t OUT1_STATE = 0;
 const uint8_t OUT2_STATE = 1;
-const uint8_t THERMOSTAT_STATE = 2;
+const uint8_t OUT3_STATE = 2;
+const uint8_t OUT4_STATE = 3;
+const uint8_t OUT5_STATE = 4;
 
-const uint8_t THERMOSTAT_ON = 0;
-const uint8_t THERMOSTAT_TEMP = 1;
-const uint8_t FLOOR_TEMP = 2;
-const uint8_t AIR_TEMP = 3;
-const uint8_t HUMIDITY = 4;
+const uint8_t TOILET_TEMP = 0;
+const uint8_t BATHROOM_TEMP = 1;
+const uint8_t BATHROOM_HUMIDITY = 2;
 
 const uint8_t PERIODICAL_TIMER_FREQUENCY = 1; //1HZ
 const uint16_t WATCHDOG_TIMEOUT = 10000000; //10s
 
-const uint8_t HOLDING_COUNT = 5;
+const uint8_t INPUT_COUNT = 3;
 
-uint8_t outputState[3] = { LOW, LOW, LOW }; //{ OUT1_STATE, OUT2_STATE, THERMOSTAT_STATE }
-uint16_t holdingRegister[HOLDING_COUNT] = { 0, 25, 0, 0, 0 }; //{ THERMOSTAT_ON, THERMOSTAT_TEMP, FLOOR_TEMP, AIR_TEMP, HUMIDITY }
-
-float floorTemp, airTemp;
+uint8_t outputState[5] = { LOW, LOW, LOW, LOW, LOW }; //{ OUT1_STATE, OUT2_STATE, OUT3_STATE, OUT4_STATE, OUT5_STATE }
+uint16_t inputRegister[INPUT_COUNT] = { 0, 0, 0 }; //{ TOILET_TEMP, BATHROOM_TEMP, BATHROOM_HUMIDITY }
 
 Modbus slave(SLAVE_ID, RS485_TX_ENABLE_PIN);
 OneButton button1(INPUT1_PIN, true, false);
 OneButton button2(INPUT2_PIN, true, false);
-OneButton thermostatButton(THERMOSTAT_ON_PIN, true, false);
+OneButton button3(INPUT3_PIN, true, false);
+OneButton button4(INPUT4_PIN, true, false);
+OneButton button5(INPUT5_PIN, true, false);
 HardwareTimer *timer1;
 OneWire ds(DS18B20_PIN);
 
 uint8_t readDigitalOut(uint8_t fc, uint16_t address, uint16_t length) {
   slave.writeCoilToBuffer(OUT1_STATE, outputState[OUT1_STATE]);
   slave.writeCoilToBuffer(OUT2_STATE, outputState[OUT2_STATE]);
-  slave.writeCoilToBuffer(THERMOSTAT_STATE, outputState[THERMOSTAT_STATE]);
+  slave.writeCoilToBuffer(OUT3_STATE, outputState[OUT3_STATE]);
+  slave.writeCoilToBuffer(OUT4_STATE, outputState[OUT4_STATE]);
+  slave.writeCoilToBuffer(OUT5_STATE, outputState[OUT5_STATE]);
   return STATUS_OK;
 }
 
@@ -82,8 +85,10 @@ void setOutput(uint8_t pin, uint8_t value) {
 uint8_t writeDigitalOut(uint8_t fc, uint16_t address, uint16_t length) {
   uint8_t lastOutputState1 = outputState[OUT1_STATE];
   uint8_t lastOutputState2 = outputState[OUT2_STATE];
-  uint8_t lastThermostatState = outputState[THERMOSTAT_STATE];
-
+  uint8_t lastOutputState3 = outputState[OUT3_STATE];
+  uint8_t lastOutputState4 = outputState[OUT4_STATE];
+  uint8_t lastOutputState5 = outputState[OUT5_STATE];
+  
   for (uint16_t i = 0; i < length; i++) {
     outputState[i + address] = slave.readCoilFromBuffer(i);
   }
@@ -94,9 +99,16 @@ uint8_t writeDigitalOut(uint8_t fc, uint16_t address, uint16_t length) {
   if (outputState[OUT2_STATE] != lastOutputState2) {
     setOutput(OUTPUT2_PIN, outputState[OUT2_STATE]);
   }
-  if (outputState[THERMOSTAT_STATE] != lastThermostatState) {
-    setOutput(THERMOSTAT_OUTPUT_PIN, outputState[THERMOSTAT_STATE]);
-  } 
+  if (outputState[OUT3_STATE] != lastOutputState3) {
+    setOutput(OUTPUT3_PIN, outputState[OUT3_STATE]);
+  }
+  if (outputState[OUT4_STATE] != lastOutputState4) {
+    setOutput(OUTPUT4_PIN, outputState[OUT4_STATE]);
+  }
+  if (outputState[OUT5_STATE] != lastOutputState5) {
+    setOutput(OUTPUT5_PIN, outputState[OUT5_STATE]);
+  }
+  
   return STATUS_OK;
 }
 
@@ -110,30 +122,53 @@ void clickButton2() {
   setOutput(OUTPUT2_PIN, outputState[OUT2_STATE]);
 }
 
-void clickThermostatButton() {
-  holdingRegister[THERMOSTAT_ON] = !holdingRegister[THERMOSTAT_ON];
-  setOutput(THERMOSTAT_LED_PIN, holdingRegister[THERMOSTAT_ON]);
+void clickButton3() {
+  outputState[OUT3_STATE] = !outputState[OUT3_STATE];
+  setOutput(OUTPUT3_PIN, outputState[OUT3_STATE]);
+}
+
+void clickButton4() {
+  outputState[OUT4_STATE] = !outputState[OUT4_STATE];
+  setOutput(OUTPUT4_PIN, outputState[OUT4_STATE]);
+}
+
+void longPressStart() {
+  outputState[OUT5_STATE] = HIGH;
+}
+
+void longPressStop() {
+  outputState[OUT5_STATE] = LOW;
 }
 
 void initButtons() {
   pinMode(INPUT1_PIN, INPUT);
   pinMode(INPUT2_PIN, INPUT);
-  pinMode(THERMOSTAT_ON_PIN, INPUT);
+  pinMode(INPUT3_PIN, INPUT);
+  pinMode(INPUT4_PIN, INPUT);
+  pinMode(INPUT5_PIN, INPUT);
   pinMode(OUTPUT1_PIN, OUTPUT);
   pinMode(OUTPUT2_PIN, OUTPUT);
-  pinMode(THERMOSTAT_LED_PIN, OUTPUT);
-  pinMode(THERMOSTAT_OUTPUT_PIN, OUTPUT);
-
+  pinMode(OUTPUT3_PIN, OUTPUT);
+  pinMode(OUTPUT4_PIN, OUTPUT);
+  pinMode(OUTPUT5_PIN, OUTPUT);
+  
   button1.attachClick(clickButton1);
   button2.attachClick(clickButton2);
-  thermostatButton.attachClick(clickThermostatButton);
+  button3.attachClick(clickButton3);
+  button4.attachClick(clickButton4);
+  button5.attachLongPressStart(longPressStart);
+  button5.attachLongPressStart(longPressStop);
 }
 
-void initPeriodicalTimer() {
-  HardwareTimer *timer = new HardwareTimer(TIM1);
-  timer->setOverflow(PERIODICAL_TIMER_FREQUENCY, HERTZ_FORMAT);
-  timer->attachInterrupt(updateSensors);
-  timer->resume();
+uint8_t checkCRC8(uint16_t data) {
+  for (uint8_t bit = 0; bit < 16; bit++) {
+    if (data & 0x8000) {
+      data = (data << 1) ^ HTU21D_CRC8_POLYNOMINAL;
+    } else {
+      data <<= 1;
+    }
+  }
+  return data >>= 8;
 }
 
 float readTemperature() {
@@ -161,17 +196,6 @@ float readTemperature() {
     return I2C_ERROR;
   }
   return (0.002681 * (float)rawTemperature - 46.85);
-}
-
-uint8_t checkCRC8(uint16_t data) {
-  for (uint8_t bit = 0; bit < 16; bit++) {
-    if (data & 0x8000) {
-      data = (data << 1) ^ HTU21D_CRC8_POLYNOMINAL;
-    } else {
-      data <<= 1;
-    }
-  }
-  return data >>= 8;
 }
 
 float readHumidity() {
@@ -208,7 +232,6 @@ float readHumidity() {
   }
   return humidity;
 }
-
 
 float readCompensatedHumidity(float temperature) {
   float humidity = readHumidity();
@@ -278,20 +301,10 @@ float readDS18B20() {
 }
 
 void updateSensors() {
-  floorTemp = readDS18B20();
-  holdingRegister[FLOOR_TEMP] = floorTemp * 10;
-  airTemp = readTemperature();
-  holdingRegister[AIR_TEMP] = airTemp * 10; 
-  holdingRegister[HUMIDITY] = readCompensatedHumidity(airTemp);
-
-  if (holdingRegister[THERMOSTAT_ON]) {
-    if ((floorTemp <= MAX_FLOOR_TEMP) && (airTemp < holdingRegister[THERMOSTAT_TEMP])) {
-      outputState[THERMOSTAT_STATE] = 1;
-    } else {
-      outputState[THERMOSTAT_STATE] = 0;
-    }
-    setOutput(THERMOSTAT_OUTPUT_PIN, outputState[THERMOSTAT_STATE]);
-  }
+  inputRegister[TOILET_TEMP] = readDS18B20() * 10;
+  float bathroomTemp = readTemperature();
+  inputRegister[BATHROOM_TEMP] = bathroomTemp * 10; 
+  inputRegister[BATHROOM_HUMIDITY] = readCompensatedHumidity(bathroomTemp);
 }
  
 void initI2C() {
@@ -323,24 +336,20 @@ void initHTU21D() {
 }
 
 /**
- * Handle Read Holding Registers (FC=03)
+ * Handle Read Input Registers (FC=04)
  */
-uint8_t readHolding(uint8_t fc, uint16_t address, uint16_t length) {
-  for (uint16_t i = 0; i < HOLDING_COUNT; i++) {
-    slave.writeRegisterToBuffer(i, holdingRegister[i]);
+uint8_t readInputRegister(uint8_t fc, uint16_t address, uint16_t length) {
+  for (uint16_t i = 0; i < INPUT_COUNT; i++) {
+    slave.writeRegisterToBuffer(i, inputRegister[i]);
   }
   return STATUS_OK;
 }
 
-/**
- * Handle Write Holding Register(s) (FC=06, FC=16)
- */
-uint8_t writeHolding(uint8_t fc, uint16_t address, uint16_t length) {
-  for (uint16_t i = 0; i < length; i++) {
-    holdingRegister[i + address] = slave.readRegisterFromBuffer(i);
-  }
-  setOutput(THERMOSTAT_LED_PIN, holdingRegister[THERMOSTAT_ON]);
-  return STATUS_OK;
+void initPeriodicalTimer() {
+  HardwareTimer *timer = new HardwareTimer(TIM1);
+  timer->setOverflow(PERIODICAL_TIMER_FREQUENCY, HERTZ_FORMAT);
+  timer->attachInterrupt(updateSensors);
+  timer->resume();
 }
 
 void setup() {
@@ -353,8 +362,7 @@ void setup() {
   
   slave.cbVector[CB_READ_COILS] = readDigitalOut;
   slave.cbVector[CB_WRITE_COILS] = writeDigitalOut;
-  slave.cbVector[CB_READ_HOLDING_REGISTERS] = readHolding;
-  slave.cbVector[CB_WRITE_HOLDING_REGISTERS] = writeHolding;
+  slave.cbVector[CB_READ_INPUT_REGISTERS] = readInputRegister;
   
   Serial.setRx(RS485_RX_PIN);
   Serial.setTx(RS485_TX_PIN);
@@ -364,7 +372,10 @@ void setup() {
 
 void loop() {
   button1.tick();
-  thermostatButton.tick();
+  button2.tick();
+  button3.tick();
+  button4.tick();
+  button5.tick();
   slave.poll();
   IWatchdog.reload();
 }

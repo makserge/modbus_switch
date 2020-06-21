@@ -70,10 +70,10 @@ uint8_t writeDigitalOut(uint8_t fc, uint16_t address, uint16_t length) {
   }
 
   if (outputState[OUT1_STATE] != lastOutputState1) {
-    setOutput(OUTPUT1_PIN, OUT1_STATE);
+    setOutput(OUTPUT1_PIN, outputState[OUT1_STATE]);
   }
   if (outputState[OUT2_STATE] != lastOutputState2) {
-    setOutput(OUTPUT2_PIN, OUT2_STATE);
+    setOutput(OUTPUT2_PIN, outputState[OUT2_STATE]);
   } 
   return STATUS_OK;
 }

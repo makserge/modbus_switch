@@ -17,13 +17,14 @@
 
 #define OUTPUT1_PIN PB0
 #define OUTPUT2_PIN PB1
-#define THERMOSTAT_LED_PIN PA8
+#define THERMOSTAT_LED_PIN PB5
 #define THERMOSTAT_OUTPUT_PIN PA7
 
 #define I2C_SDA PB7
 #define I2C_SCL PB6
 
 #define DS18B20_PIN PA15
+#define DS18B20_PRECISION 11
 
 #define HTU21D_I2C_ADDRESS 0x40
 #define HTU21D_RES_RH8_TEMP12 0x01
@@ -49,7 +50,7 @@ const uint8_t AIR_TEMP = 3;
 const uint8_t HUMIDITY = 4;
 
 const uint8_t PERIODICAL_TIMER_FREQUENCY = 1; //1HZ
-const uint16_t WATCHDOG_TIMEOUT = 10000000; //10s
+const uint32_t WATCHDOG_TIMEOUT = 10000000; //10s
 
 const uint8_t HOLDING_COUNT = 5;
 
@@ -62,7 +63,6 @@ Modbus slave(SLAVE_ID, RS485_TX_ENABLE_PIN);
 OneButton button1(INPUT1_PIN, true, false);
 OneButton button2(INPUT2_PIN, true, false);
 OneButton thermostatButton(THERMOSTAT_ON_PIN, true, false);
-HardwareTimer *timer1;
 OneWire ds(DS18B20_PIN);
 
 uint8_t readDigitalOut(uint8_t fc, uint16_t address, uint16_t length) {
@@ -156,7 +156,7 @@ float readTemperature() {
   rawTemperature = Wire.read() << 8;
   rawTemperature |= Wire.read();
   checksum = Wire.read();
-  
+
   if (checkCRC8(rawTemperature) != checksum) {
     return I2C_ERROR;
   }
@@ -193,14 +193,14 @@ float readHumidity() {
   rawHumidity = Wire.read() << 8;
   rawHumidity |= Wire.read();
   checksum = Wire.read();
- 
+
   if (checkCRC8(rawHumidity) != checksum) {
     return I2C_ERROR;
   }
 
   rawHumidity ^= 0x02;
   humidity = (0.001907 * (float)rawHumidity - 6);
-  
+
   if (humidity < 0) {
     humidity = 0;
   } else if (humidity > 100) {
@@ -208,7 +208,6 @@ float readHumidity() {
   }
   return humidity;
 }
-
 
 float readCompensatedHumidity(float temperature) {
   float humidity = readHumidity();
@@ -221,69 +220,45 @@ float readCompensatedHumidity(float temperature) {
   return humidity;
 }
 
-float readDS18B20() {
-  uint8_t typeS;
-  uint8_t data[12];
-  uint8_t address[8];
-  
-  if (!ds.search(address)) {
-    ds.reset_search();
-    delay(250);
-    return 0;
-  }
-  if (OneWire::crc8(address, 7) != address[7]) {
-    return 0;
-  }
-  switch (address[0]) {
-    case 0x10:
-      typeS = 1;
-      break;
-    case 0x28:
-    case 0x22:
-      typeS = 0;
-      break;
-    default:
-      return 0;
-  } 
+void initDS() {
   ds.reset();
-  ds.select(address);
-  ds.write(0x44, 1);
-  delay(1000);
-  ds.reset();
-  ds.select(address);    
-  ds.write(0xBE);
+  ds.write(0xCC);
+  ds.write(0x4E);
+  ds.write(0);
+  ds.write(0);
+  ds.write(DS18B20_PRECISION << 5);
+  ds.write(0x48);
+}
 
-  for (uint8_t i = 0; i < 9; i++) {
-    data[i] = ds.read();
-  }
+float readDS() {
+  uint8_t data[2];
+
+  ds.reset();
+  ds.write(0xCC);
+  ds.write(0xBE);
+  data[0] = ds.read();
+  data[1] = ds.read();
+
+  ds.reset();
+  ds.write(0xCC);
+  ds.write(0x44);
+
   int16_t raw = (data[1] << 8) | data[0];
-  if (typeS) {
-    raw = raw << 3;
-    if (data[7] == 0x10) {
-      raw = (raw & 0xFFF0) + 12 - data[6];
-    }
-  } else {
-    byte cfg = (data[4] & 0x60);
-    if (cfg == 0x00) {
-      raw = raw & ~7;
-    }
-    else if (cfg == 0x20) {
-      raw = raw & ~3;
-    }
-    else if (cfg == 0x40) {
-      raw = raw & ~1;
-    }
-  }
   return (float)raw / 16.0;
 }
 
 void updateSensors() {
-  floorTemp = readDS18B20();
-  holdingRegister[FLOOR_TEMP] = floorTemp * 10;
   airTemp = readTemperature();
-  holdingRegister[AIR_TEMP] = airTemp * 10; 
+  holdingRegister[AIR_TEMP] = airTemp * 10;
   holdingRegister[HUMIDITY] = readCompensatedHumidity(airTemp);
-
+  
+  floorTemp = readDS();
+  
+  if (floorTemp == 85) {//initial value
+    return;
+  }
+  holdingRegister[FLOOR_TEMP] = floorTemp * 10;
+ 
   if (holdingRegister[THERMOSTAT_ON]) {
     if ((floorTemp <= MAX_FLOOR_TEMP) && (airTemp < holdingRegister[THERMOSTAT_TEMP])) {
       outputState[THERMOSTAT_STATE] = 1;
@@ -315,7 +290,7 @@ void initHTU21D() {
   userRegisterData &= 0x7E;
   userRegisterData |= HTU21D_RES_RH8_TEMP12;
   userRegisterData &= HTU21D_HEATER_OFF;
-  
+
   Wire.beginTransmission(HTU21D_I2C_ADDRESS);
   Wire.write(HTU21D_USER_REGISTER_WRITE);
   Wire.write(userRegisterData);
@@ -344,26 +319,28 @@ uint8_t writeHolding(uint8_t fc, uint16_t address, uint16_t length) {
 }
 
 void setup() {
-  IWatchdog.begin(WATCHDOG_TIMEOUT);
-  
   initButtons();
-  initPeriodicalTimer();
   initI2C();
   initHTU21D();
-  
+  initDS();
+  initPeriodicalTimer();
+
   slave.cbVector[CB_READ_COILS] = readDigitalOut;
   slave.cbVector[CB_WRITE_COILS] = writeDigitalOut;
   slave.cbVector[CB_READ_HOLDING_REGISTERS] = readHolding;
   slave.cbVector[CB_WRITE_HOLDING_REGISTERS] = writeHolding;
-  
+
   Serial.setRx(RS485_RX_PIN);
   Serial.setTx(RS485_TX_PIN);
   Serial.begin(RS485_BAUDRATE);
   slave.begin(RS485_BAUDRATE);
+
+  IWatchdog.begin(WATCHDOG_TIMEOUT);
 }
 
 void loop() {
   button1.tick();
+  button2.tick();
   thermostatButton.tick();
   slave.poll();
   IWatchdog.reload();

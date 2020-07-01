@@ -37,25 +37,24 @@
 #define HTU21D_TEMP_COEFFICIENT -0.15
 #define HTU21D_TRIGGER_HUMD_MEASURE_HOLD 0xE5
 
-const uint8_t MAX_FLOOR_TEMP = 40; //Celcius degree
-
 const uint8_t OUT1_STATE = 0;
 const uint8_t OUT2_STATE = 1;
 const uint8_t THERMOSTAT_STATE = 2;
 
 const uint8_t THERMOSTAT_ON = 0;
 const uint8_t THERMOSTAT_TEMP = 1;
-const uint8_t FLOOR_TEMP = 2;
-const uint8_t AIR_TEMP = 3;
-const uint8_t HUMIDITY = 4;
+const uint8_t MAX_FLOOR_TEMP = 2;
+const uint8_t FLOOR_TEMP = 3;
+const uint8_t AIR_TEMP = 4;
+const uint8_t HUMIDITY = 5;
 
 const uint8_t PERIODICAL_TIMER_FREQUENCY = 1; //1HZ
 const uint32_t WATCHDOG_TIMEOUT = 10000000; //10s
 
-const uint8_t HOLDING_COUNT = 5;
+const uint8_t HOLDING_COUNT = 6;
 
 uint8_t outputState[3] = { LOW, LOW, LOW }; //{ OUT1_STATE, OUT2_STATE, THERMOSTAT_STATE }
-uint16_t holdingRegister[HOLDING_COUNT] = { 0, 25, 0, 0, 0 }; //{ THERMOSTAT_ON, THERMOSTAT_TEMP, FLOOR_TEMP, AIR_TEMP, HUMIDITY }
+uint16_t holdingRegister[HOLDING_COUNT] = { 0, 25, 40, 0, 0, 0 }; //{ THERMOSTAT_ON, THERMOSTAT_TEMP, MAX_FLOOR_TEMP, FLOOR_TEMP, AIR_TEMP, HUMIDITY }
 
 float floorTemp, airTemp;
 
@@ -113,6 +112,10 @@ void clickButton2() {
 void clickThermostatButton() {
   holdingRegister[THERMOSTAT_ON] = !holdingRegister[THERMOSTAT_ON];
   setOutput(THERMOSTAT_LED_PIN, holdingRegister[THERMOSTAT_ON]);
+  if (!holdingRegister[THERMOSTAT_ON]) {
+    outputState[THERMOSTAT_STATE] = LOW;
+    setOutput(THERMOSTAT_OUTPUT_PIN, outputState[THERMOSTAT_STATE]);
+  }  
 }
 
 void initButtons() {
@@ -260,7 +263,7 @@ void updateSensors() {
   holdingRegister[FLOOR_TEMP] = floorTemp * 10;
  
   if (holdingRegister[THERMOSTAT_ON]) {
-    if ((floorTemp <= MAX_FLOOR_TEMP) && (airTemp < holdingRegister[THERMOSTAT_TEMP])) {
+    if ((floorTemp <= holdingRegister[MAX_FLOOR_TEMP]) && (airTemp < holdingRegister[THERMOSTAT_TEMP])) {
       outputState[THERMOSTAT_STATE] = 1;
     } else {
       outputState[THERMOSTAT_STATE] = 0;
@@ -315,6 +318,10 @@ uint8_t writeHolding(uint8_t fc, uint16_t address, uint16_t length) {
     holdingRegister[i + address] = slave.readRegisterFromBuffer(i);
   }
   setOutput(THERMOSTAT_LED_PIN, holdingRegister[THERMOSTAT_ON]);
+  if (!holdingRegister[THERMOSTAT_ON]) {
+    outputState[THERMOSTAT_STATE] = LOW;
+    setOutput(THERMOSTAT_OUTPUT_PIN, outputState[THERMOSTAT_STATE]);
+  }
   return STATUS_OK;
 }
 

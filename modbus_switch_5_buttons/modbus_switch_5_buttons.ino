@@ -9,16 +9,16 @@
 
 #define RS485_RX_PIN PA10
 #define RS485_TX_PIN PA9
-#define RS485_TX_ENABLE_PIN PA12
+#define RS485_TX_ENABLE_PIN PA11
 
-#define INPUT1_PIN PA2
-#define INPUT2_PIN PA3
-#define INPUT3_PIN PA4
-#define INPUT4_PIN PA5
-#define INPUT5_PIN PA6
+#define INPUT1_PIN PA3
+#define INPUT2_PIN PA4
+#define INPUT3_PIN PA6
+#define INPUT4_PIN PB0
+#define INPUT5_PIN PB1
 
-#define OUTPUT1_PIN PB0
-#define OUTPUT2_PIN PB1
+#define OUTPUT1_PIN PA12
+#define OUTPUT2_PIN PA15
 #define OUTPUT3_PIN PB3
 #define OUTPUT4_PIN PB4
 #define OUTPUT5_PIN PB5
@@ -26,7 +26,8 @@
 #define I2C_SDA PB7
 #define I2C_SCL PB6
 
-#define DS18B20_PIN PA15
+#define DS18B20_PIN PA8
+#define DS18B20_PRECISION 11
 
 #define HTU21D_I2C_ADDRESS 0x40
 #define HTU21D_RES_RH8_TEMP12 0x01
@@ -50,7 +51,7 @@ const uint8_t BATHROOM_TEMP = 1;
 const uint8_t BATHROOM_HUMIDITY = 2;
 
 const uint8_t PERIODICAL_TIMER_FREQUENCY = 1; //1HZ
-const uint16_t WATCHDOG_TIMEOUT = 10000000; //10s
+const uint32_t WATCHDOG_TIMEOUT = 10000000; //10s
 
 const uint8_t INPUT_COUNT = 3;
 
@@ -132,12 +133,9 @@ void clickButton4() {
   setOutput(OUTPUT4_PIN, outputState[OUT4_STATE]);
 }
 
-void longPressStart() {
-  outputState[OUT5_STATE] = HIGH;
-}
-
-void longPressStop() {
-  outputState[OUT5_STATE] = LOW;
+void clickButton5() {
+  outputState[OUT5_STATE] = !outputState[OUT5_STATE];
+  setOutput(OUTPUT5_PIN, outputState[OUT5_STATE]);
 }
 
 void initButtons() {
@@ -156,8 +154,7 @@ void initButtons() {
   button2.attachClick(clickButton2);
   button3.attachClick(clickButton3);
   button4.attachClick(clickButton4);
-  button5.attachLongPressStart(longPressStart);
-  button5.attachLongPressStart(longPressStop);
+  button5.attachClick(clickButton5);
 }
 
 uint8_t checkCRC8(uint16_t data) {
@@ -244,64 +241,35 @@ float readCompensatedHumidity(float temperature) {
   return humidity;
 }
 
-float readDS18B20() {
-  uint8_t typeS;
-  uint8_t data[12];
-  uint8_t address[8];
-  
-  if (!ds.search(address)) {
-    ds.reset_search();
-    delay(250);
-    return 0;
-  }
-  if (OneWire::crc8(address, 7) != address[7]) {
-    return 0;
-  }
-  switch (address[0]) {
-    case 0x10:
-      typeS = 1;
-      break;
-    case 0x28:
-    case 0x22:
-      typeS = 0;
-      break;
-    default:
-      return 0;
-  } 
+void initDS() {
   ds.reset();
-  ds.select(address);
-  ds.write(0x44, 1);
-  delay(1000);
-  ds.reset();
-  ds.select(address);    
-  ds.write(0xBE);
+  ds.write(0xCC);
+  ds.write(0x4E);
+  ds.write(0);
+  ds.write(0);
+  ds.write(DS18B20_PRECISION << 5);
+  ds.write(0x48);
+}
 
-  for (uint8_t i = 0; i < 9; i++) {
-    data[i] = ds.read();
-  }
+float readDS() {
+  uint8_t data[2];
+
+  ds.reset();
+  ds.write(0xCC);
+  ds.write(0xBE);
+  data[0] = ds.read();
+  data[1] = ds.read();
+
+  ds.reset();
+  ds.write(0xCC);
+  ds.write(0x44);
+
   int16_t raw = (data[1] << 8) | data[0];
-  if (typeS) {
-    raw = raw << 3;
-    if (data[7] == 0x10) {
-      raw = (raw & 0xFFF0) + 12 - data[6];
-    }
-  } else {
-    byte cfg = (data[4] & 0x60);
-    if (cfg == 0x00) {
-      raw = raw & ~7;
-    }
-    else if (cfg == 0x20) {
-      raw = raw & ~3;
-    }
-    else if (cfg == 0x40) {
-      raw = raw & ~1;
-    }
-  }
   return (float)raw / 16.0;
 }
 
 void updateSensors() {
-  inputRegister[TOILET_TEMP] = readDS18B20() * 10;
+  inputRegister[TOILET_TEMP] = readDS() * 10;
   float bathroomTemp = readTemperature();
   inputRegister[BATHROOM_TEMP] = bathroomTemp * 10; 
   inputRegister[BATHROOM_HUMIDITY] = readCompensatedHumidity(bathroomTemp);
@@ -353,12 +321,11 @@ void initPeriodicalTimer() {
 }
 
 void setup() {
-  IWatchdog.begin(WATCHDOG_TIMEOUT);
-  
   initButtons();
-  initPeriodicalTimer();
   initI2C();
   initHTU21D();
+  initDS();
+  initPeriodicalTimer();
   
   slave.cbVector[CB_READ_COILS] = readDigitalOut;
   slave.cbVector[CB_WRITE_COILS] = writeDigitalOut;
@@ -368,6 +335,8 @@ void setup() {
   Serial.setTx(RS485_TX_PIN);
   Serial.begin(RS485_BAUDRATE);
   slave.begin(RS485_BAUDRATE);
+
+  IWatchdog.begin(WATCHDOG_TIMEOUT);
 }
 
 void loop() {

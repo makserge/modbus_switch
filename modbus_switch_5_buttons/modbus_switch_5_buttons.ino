@@ -35,17 +35,10 @@
 #define PCF_BATH_LIGHT_INPUT_PIN P2
 #define PCF_TOILET_LIGHT_INPUT_PIN P3
 
-<<<<<<< HEAD
 #define PCF_BATH_FAN_OUTPUT_PIN P7
 #define PCF_TOILET_FAN_OUTPUT_PIN P6
 #define PCF_BATH_LIGHT_OUTPUT_PIN P5
 #define PCF_TOILET_LIGHT_OUTPUT_PIN P4
-=======
-#define PCF_BATH_FAN_OUTPUT_PIN P4
-#define PCF_TOILET_FAN_OUTPUT_PIN P5
-#define PCF_BATH_LIGHT_OUTPUT_PIN P6
-#define PCF_TOILET_LIGHT_OUTPUT_PIN P7
->>>>>>> a57cc4be810bda855cd2088a9e70068b7e0b8927
 
 #define I2C_SDA PB7
 #define I2C_SCL PB6
@@ -130,30 +123,11 @@ OneButton bathFanButton(INPUT1_PIN, true, false);
 OneButton toiletFanButton(INPUT2_PIN, true, false);
 OneButton bathLightButton(INPUT3_PIN, true, false);
 OneButton toliletLightButton(INPUT4_PIN, true, false);
-<<<<<<< HEAD
 HardwareTimer *bathTimer;
 HardwareTimer *toiletTimer;
 OneWire ds(DS18B20_PIN);
 PCF8574 pcf8574(PCF8574_I2C_ADDRESS);
 
-=======
-HardwareTimer *timer1;
-OneWire ds(DS18B20_PIN);
-PCF8574 pcf8574(PCF8574_I2C_ADDRESS);
-
-uint8_t readDigitalOut(uint8_t fc, uint16_t address, uint16_t length) {
-  slave.writeCoilToBuffer(BATH_FAN, outputState[BATH_FAN]);
-  slave.writeCoilToBuffer(TOILET_FAN, outputState[TOILET_FAN]);
-  slave.writeCoilToBuffer(BATH_LIGHT, outputState[BATH_LIGHT]);
-  slave.writeCoilToBuffer(TOILET_LIGHT, outputState[TOILET_LIGHT]);
-  slave.writeCoilToBuffer(BOILER, outputState[BOILER]);
-  slave.writeCoilToBuffer(HEAT1, outputState[HEAT1]);
-  slave.writeCoilToBuffer(HEAT2, outputState[HEAT2]);
-  slave.writeCoilToBuffer(HEAT3, outputState[HEAT3]);
-  return STATUS_OK;
-}
-
->>>>>>> a57cc4be810bda855cd2088a9e70068b7e0b8927
 void setOutput(uint8_t out) {
   uint8_t pin;
   uint8_t pcfPin;
@@ -162,7 +136,6 @@ void setOutput(uint8_t out) {
     case BATH_FAN:
       pin = BATH_FAN_OUTPUT_PIN;
       pcfPin = PCF_BATH_FAN_OUTPUT_PIN;
-<<<<<<< HEAD
       break;
     case TOILET_FAN:
       pin = TOILET_FAN_OUTPUT_PIN;
@@ -176,21 +149,6 @@ void setOutput(uint8_t out) {
       pin = TOILET_LIGHT_OUTPUT_PIN;
       pcfPin = PCF_TOILET_LIGHT_OUTPUT_PIN;
       break;
-=======
-      break;
-    case TOILET_FAN:
-      pin = TOILET_FAN_OUTPUT_PIN;
-      pcfPin = PCF_TOILET_FAN_OUTPUT_PIN;
-      break;
-    case BATH_LIGHT:
-      pin = BATH_LIGHT_OUTPUT_PIN;
-      pcfPin = PCF_BATH_LIGHT_OUTPUT_PIN;
-      break;
-    case TOILET_LIGHT:
-      pin = TOILET_LIGHT_OUTPUT_PIN;
-      pcfPin = PCF_TOILET_LIGHT_OUTPUT_PIN;
-      break;
->>>>>>> a57cc4be810bda855cd2088a9e70068b7e0b8927
     case BOILER:
       pin = BOILER_OUTPUT_PIN;
       pcfPin = 254;
@@ -198,7 +156,6 @@ void setOutput(uint8_t out) {
     case HEAT1:
       pin = HEAT1_OUTPUT_PIN;
       pcfPin = 254;
-<<<<<<< HEAD
       break;
     case HEAT2:
       pin = HEAT2_OUTPUT_PIN;
@@ -207,16 +164,6 @@ void setOutput(uint8_t out) {
     case HEAT3:
       pin = HEAT3_OUTPUT_PIN;
       pcfPin = 254;
-=======
-      break;
-    case HEAT2:
-      pin = HEAT2_OUTPUT_PIN;
-      pcfPin = 254;
-      break;
-    case HEAT3:
-      pin = HEAT3_OUTPUT_PIN;
-      pcfPin = 254;
->>>>>>> a57cc4be810bda855cd2088a9e70068b7e0b8927
       break;            
   }
   value = outputState[out];
@@ -231,7 +178,6 @@ void setOutput(uint8_t out) {
  */
 uint8_t writeDigitalOut(uint8_t fc, uint16_t address, uint16_t length) {
   uint8_t lastOutputState[8] = { outputState[BATH_FAN], outputState[TOILET_FAN], outputState[BATH_LIGHT], outputState[TOILET_LIGHT], outputState[BOILER], outputState[HEAT1], outputState[HEAT2], outputState[HEAT3] };
-<<<<<<< HEAD
 
   if (address > 8 || (address + length) > 8) {
     return STATUS_ILLEGAL_DATA_ADDRESS;
@@ -240,11 +186,6 @@ uint8_t writeDigitalOut(uint8_t fc, uint16_t address, uint16_t length) {
     outputState[i + address] = slave.readCoilFromBuffer(i);
   }
   for (uint16_t i = 0; i < 8; i++) {
-=======
-  
-  for (uint16_t i = 0; i < 8; i++) {
-    outputState[i + address] = slave.readCoilFromBuffer(i);
->>>>>>> a57cc4be810bda855cd2088a9e70068b7e0b8927
     if (outputState[i] != lastOutputState[i]) {
       setOutput(i);
     }
@@ -252,7 +193,6 @@ uint8_t writeDigitalOut(uint8_t fc, uint16_t address, uint16_t length) {
   return STATUS_OK;
 }
 
-<<<<<<< HEAD
 uint8_t readDigitalOut(uint8_t fc, uint16_t address, uint16_t length) {
   if (address > 8 || (address + length) > 8) {
     return STATUS_ILLEGAL_DATA_ADDRESS;
@@ -261,11 +201,6 @@ uint8_t readDigitalOut(uint8_t fc, uint16_t address, uint16_t length) {
     slave.writeCoilToBuffer(i, outputState[address + i]);
   }
   return STATUS_OK;
-=======
-void setPWMOutput(uint8_t pin, uint8_t value) {
-  uint32_t channel = STM_PIN_CHANNEL(pinmap_function(digitalPinToPinName(pin), PinMap_PWM));
-  timer1->setPWM(channel, pin, PWM_FREQUENCY, PWM_OUTPUT_LOG[value]);
->>>>>>> a57cc4be810bda855cd2088a9e70068b7e0b8927
 }
 
 void clickBathFanButton() {
@@ -299,16 +234,12 @@ void initButtons() {
   pinMode(BATH_LIGHT_OUTPUT_PIN, OUTPUT);
   pinMode(TOILET_LIGHT_OUTPUT_PIN, OUTPUT);
   pinMode(BOILER_OUTPUT_PIN, OUTPUT);
-<<<<<<< HEAD
   pinMode(HEAT1_OUTPUT_PIN, OUTPUT);
   pinMode(HEAT2_OUTPUT_PIN, OUTPUT);
   pinMode(HEAT3_OUTPUT_PIN, OUTPUT);
   pinMode(BATH_LIGHT_LEVEL_PIN, OUTPUT);
   pinMode(TOILET_LIGHT_LEVEL_PIN, OUTPUT);
 
-=======
-  
->>>>>>> a57cc4be810bda855cd2088a9e70068b7e0b8927
   bathFanButton.attachClick(clickBathFanButton);
   toiletFanButton.attachClick(clickToiletFanButton);
   bathLightButton.attachClick(clickBathLightButton);
@@ -652,44 +583,28 @@ uint8_t writeHolding(uint8_t fc, uint16_t address, uint16_t length) {
     }  
   }
   if (holdingRegister[BATH_LIGHT_LEVEL] != lastOutputLevel1) {
-<<<<<<< HEAD
     uint32_t channel = STM_PIN_CHANNEL(pinmap_function(digitalPinToPinName(BATH_LIGHT_LEVEL_PIN), PinMap_PWM));
     bathTimer->setPWM(channel, BATH_LIGHT_LEVEL_PIN, PWM_FREQUENCY, PWM_OUTPUT_LOG[holdingRegister[BATH_LIGHT_LEVEL]]);
   }  
   if (holdingRegister[TOILET_LIGHT_LEVEL] != lastOutputLevel2) {
     uint32_t channel = STM_PIN_CHANNEL(pinmap_function(digitalPinToPinName(TOILET_LIGHT_LEVEL_PIN), PinMap_PWM));
     toiletTimer->setPWM(channel, TOILET_LIGHT_LEVEL_PIN, PWM_FREQUENCY, PWM_OUTPUT_LOG[holdingRegister[TOILET_LIGHT_LEVEL]]);
-=======
-    setPWMOutput(BATH_LIGHT_LEVEL_PIN, holdingRegister[BATH_LIGHT_LEVEL]);
   }  
-  if (holdingRegister[TOILET_LIGHT_LEVEL] != lastOutputLevel2) {
-    setPWMOutput(TOILET_LIGHT_LEVEL_PIN, holdingRegister[TOILET_LIGHT_LEVEL]);
->>>>>>> a57cc4be810bda855cd2088a9e70068b7e0b8927
-  }  
-  return STATUS_OK;
+  return STATUS_OK; 
 }
 
 void initPeriodicalTimer() {
-<<<<<<< HEAD
   HardwareTimer *timer = new HardwareTimer(TIM3);
-=======
-  HardwareTimer *timer = new HardwareTimer(TIM1);
->>>>>>> a57cc4be810bda855cd2088a9e70068b7e0b8927
   timer->setOverflow(PERIODICAL_TIMER_FREQUENCY, MICROSEC_FORMAT);
   timer->attachInterrupt(updateSensors);
   timer->resume();
 }
 
 void initPWM() {
-<<<<<<< HEAD
   TIM_TypeDef *instance = (TIM_TypeDef *)pinmap_peripheral(digitalPinToPinName(BATH_LIGHT_LEVEL), PinMap_PWM);
   bathTimer = new HardwareTimer(instance);
   TIM_TypeDef *instance2 = (TIM_TypeDef *)pinmap_peripheral(digitalPinToPinName(TOILET_LIGHT_LEVEL_PIN), PinMap_PWM);
   toiletTimer = new HardwareTimer(instance2);
-=======
-  TIM_TypeDef *instance = (TIM_TypeDef *)pinmap_peripheral(digitalPinToPinName(TOILET_LIGHT_LEVEL_PIN), PinMap_PWM);
-  timer1 = new HardwareTimer(instance);
->>>>>>> a57cc4be810bda855cd2088a9e70068b7e0b8927
 }
 
 void initBathData() {

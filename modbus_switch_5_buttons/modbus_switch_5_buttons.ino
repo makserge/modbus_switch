@@ -402,6 +402,10 @@ void processBathFanRule() {
   } else {
     bathFanEnvMin = humidity - (humidity - bathFanEnvMin) * bathFanEnvMinDecay;
   }
+  if (outputState[BATH_LIGHT]) {
+    bathFanEnvMax = humidity;
+    return;
+  }
   if (bathFanEnvMax < humidity) {
     bathFanEnvMax = humidity;
   } else {

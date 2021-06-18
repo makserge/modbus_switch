@@ -107,8 +107,9 @@ typedef enum {FAN_OFF, FAN_NOCHANGE, FAN_ON};
 uint8_t bathFanLastState = FAN_OFF;
 
 uint8_t toiletLightLastState = LOW;
-uint8_t toiletFanLastState = LOW;
+uint8_t isToiletFanAutoOn = LOW;
 uint16_t toiletFanRuleCounter = 0;
+
 const uint8_t FAN_DELAY_MINUTE = 200;//ticks per minute for 300ms timer
 
 const uint8_t PWM_OUTPUT_STEPS = 55;
@@ -188,6 +189,9 @@ uint8_t writeDigitalOut(uint8_t fc, uint16_t address, uint16_t length) {
   for (uint16_t i = 0; i < 8; i++) {
     if (outputState[i] != lastOutputState[i]) {
       setOutput(i);
+      if (i == TOILET_FAN) {
+        isToiletFanAutoOn = LOW;
+      }  
     }
   }
   return STATUS_OK;
@@ -209,6 +213,7 @@ void clickBathFanButton() {
 }
 
 void clickToiletFanButton() {
+  isToiletFanAutoOn = LOW;
   outputState[TOILET_FAN] = !outputState[TOILET_FAN];
   setOutput(TOILET_FAN);
 }
@@ -428,38 +433,39 @@ void processBathFanRule() {
 
 void processToiletLightRule() {
   if (inputRegister[TOILET_PRESENCE] != toiletLightLastState) {
-    outputState[BATH_LIGHT] = inputRegister[TOILET_PRESENCE];
-    setOutput(BATH_LIGHT);
+    outputState[TOILET_LIGHT] = inputRegister[TOILET_PRESENCE];
+    setOutput(TOILET_LIGHT);
   }
   toiletLightLastState = inputRegister[TOILET_PRESENCE];
 }
 
 void processToiletFanRule() {
-  if (outputState[BATH_LIGHT] != toiletFanLastState) {
-    if (outputState[BATH_LIGHT]) {
-      toiletFanRuleCounter = 0;
-      if (outputState[BATH_FAN]) {
-        outputState[BATH_FAN] = LOW;
-        setOutput(BATH_FAN);
-        return;
-      }  
-    } else {
-      if ((toiletFanRuleCounter == 0) && !outputState[BATH_FAN]) {
-         outputState[BATH_FAN] = HIGH;
-         setOutput(BATH_FAN);
-         return;
-      }
-      if (outputState[BATH_FAN]) {
-        if (toiletFanRuleCounter < (inputRegister[TOILET_FAN_DELAY] * FAN_DELAY_MINUTE)) {
-          toiletFanRuleCounter++;
-          return;
-        }  
-        outputState[BATH_FAN] = LOW;
-        setOutput(BATH_FAN);
-      }  
+  if (outputState[TOILET_LIGHT]) {
+    toiletFanRuleCounter = 0;
+    if (isToiletFanAutoOn) {
+      isToiletFanAutoOn = LOW;
+      outputState[TOILET_FAN] = LOW;
+      setOutput(TOILET_FAN);
+    }  
+  } else {
+    if ((toiletFanRuleCounter == 0) && !outputState[TOILET_FAN]) {
+       isToiletFanAutoOn = HIGH;
+       outputState[TOILET_FAN] = HIGH;
+       setOutput(TOILET_FAN);
+       return;
     }
+    if (outputState[TOILET_FAN]) {
+      if (toiletFanRuleCounter < (holdingRegister[TOILET_FAN_DELAY] * FAN_DELAY_MINUTE)) {
+        toiletFanRuleCounter++;
+        return;
+      }
+      if (isToiletFanAutoOn) {
+        isToiletFanAutoOn = LOW;
+        outputState[TOILET_FAN] = LOW;
+        setOutput(TOILET_FAN);
+      }  
+    }  
   }
-  toiletFanLastState = outputState[BATH_LIGHT];
 }
 
 void processRules() {

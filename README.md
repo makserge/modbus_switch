@@ -1,1 +1,1 @@
-# modbus_switch
+Modbus wall switches

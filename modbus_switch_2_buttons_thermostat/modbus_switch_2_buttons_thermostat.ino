@@ -3,6 +3,7 @@
 #include <OneWire.h>
 #include <OneButton.h>
 #include <IWatchdog.h>
+#include <EEPROM.h>
 
 #define SLAVE_ID 31
 #define RS485_BAUDRATE 9600
@@ -43,18 +44,24 @@ const uint8_t THERMOSTAT_STATE = 2;
 
 const uint8_t THERMOSTAT_ON = 0;
 const uint8_t THERMOSTAT_TEMP = 1;
-const uint8_t MAX_FLOOR_TEMP = 2;
-const uint8_t FLOOR_TEMP = 3;
-const uint8_t AIR_TEMP = 4;
-const uint8_t HUMIDITY = 5;
+const uint8_t MIN_FLOOR_TEMP = 2;
+const uint8_t MAX_FLOOR_TEMP = 3;
+const uint8_t FLOOR_TEMP = 4;
+const uint8_t AIR_TEMP = 5;
+const uint8_t HUMIDITY = 6;
+
+const uint8_t THERMOSTAT_ON_EEPROM = 10;
+const uint8_t THERMOSTAT_TEMP_EEPROM = 20;
+const uint8_t MIN_FLOOR_TEMP_EEPROM = 30;
+const uint8_t MAX_FLOOR_TEMP_EEPROM = 40;
 
 const uint8_t PERIODICAL_TIMER_FREQUENCY = 1; //1HZ
 const uint32_t WATCHDOG_TIMEOUT = 10000000; //10s
 
-const uint8_t HOLDING_COUNT = 6;
+const uint8_t HOLDING_COUNT = 7;
 
 uint8_t outputState[3] = { LOW, LOW, LOW }; //{ OUT1_STATE, OUT2_STATE, THERMOSTAT_STATE }
-uint16_t holdingRegister[HOLDING_COUNT] = { 0, 25, 40, 0, 0, 0 }; //{ THERMOSTAT_ON, THERMOSTAT_TEMP, MAX_FLOOR_TEMP, FLOOR_TEMP, AIR_TEMP, HUMIDITY }
+uint16_t holdingRegister[HOLDING_COUNT] = { 0, 25, 20, 40, 0, 0, 0 }; //{ THERMOSTAT_ON, THERMOSTAT_TEMP, MIN_FLOOR_TEMP, MAX_FLOOR_TEMP, FLOOR_TEMP, AIR_TEMP, HUMIDITY }
 
 float floorTemp, airTemp;
 
@@ -65,9 +72,10 @@ OneButton thermostatButton(THERMOSTAT_ON_PIN, true, false);
 OneWire ds(DS18B20_PIN);
 
 uint8_t readDigitalOut(uint8_t fc, uint16_t address, uint16_t length) {
-  slave.writeCoilToBuffer(OUT1_STATE, outputState[OUT1_STATE]);
-  slave.writeCoilToBuffer(OUT2_STATE, outputState[OUT2_STATE]);
-  slave.writeCoilToBuffer(THERMOSTAT_STATE, outputState[THERMOSTAT_STATE]);
+  for (int i = 0; i < length; i++) {
+    slave.writeCoilToBuffer(i, outputState[i + address]);
+  }
+  
   return STATUS_OK;
 }
 
@@ -115,7 +123,23 @@ void clickThermostatButton() {
   if (!holdingRegister[THERMOSTAT_ON]) {
     outputState[THERMOSTAT_STATE] = LOW;
     setOutput(THERMOSTAT_OUTPUT_PIN, outputState[THERMOSTAT_STATE]);
-  }  
+  }
+  EEPROM.put(THERMOSTAT_ON_EEPROM, holdingRegister[THERMOSTAT_ON]); 
+}
+
+void loadData() {
+  EEPROM.get(THERMOSTAT_ON_EEPROM, holdingRegister[THERMOSTAT_ON]);
+  if (holdingRegister[THERMOSTAT_ON] > 1) {
+    EEPROM.put(THERMOSTAT_ON_EEPROM, 0);
+    EEPROM.put(THERMOSTAT_TEMP_EEPROM, holdingRegister[THERMOSTAT_TEMP]);
+    EEPROM.put(MIN_FLOOR_TEMP_EEPROM, holdingRegister[MIN_FLOOR_TEMP]);
+    EEPROM.put(MAX_FLOOR_TEMP_EEPROM, holdingRegister[MAX_FLOOR_TEMP]);
+  }
+
+  EEPROM.get(THERMOSTAT_ON_EEPROM, holdingRegister[THERMOSTAT_ON]);
+  EEPROM.get(THERMOSTAT_TEMP_EEPROM, holdingRegister[THERMOSTAT_TEMP]);
+  EEPROM.get(MIN_FLOOR_TEMP_EEPROM, holdingRegister[MIN_FLOOR_TEMP]);
+  EEPROM.get(MAX_FLOOR_TEMP_EEPROM, holdingRegister[MAX_FLOOR_TEMP]);
 }
 
 void initButtons() {
@@ -304,8 +328,8 @@ void initHTU21D() {
  * Handle Read Holding Registers (FC=03)
  */
 uint8_t readHolding(uint8_t fc, uint16_t address, uint16_t length) {
-  for (uint16_t i = 0; i < HOLDING_COUNT; i++) {
-    slave.writeRegisterToBuffer(i, holdingRegister[i]);
+  for (uint16_t i = 0; i < length; i++) {
+    slave.writeRegisterToBuffer(i, holdingRegister[i + address]);
   }
   return STATUS_OK;
 }
@@ -317,15 +341,27 @@ uint8_t writeHolding(uint8_t fc, uint16_t address, uint16_t length) {
   for (uint16_t i = 0; i < length; i++) {
     holdingRegister[i + address] = slave.readRegisterFromBuffer(i);
   }
+  if (holdingRegister[THERMOSTAT_TEMP] > holdingRegister[MAX_FLOOR_TEMP]) {
+    holdingRegister[THERMOSTAT_TEMP] = holdingRegister[MAX_FLOOR_TEMP];
+  } else if (holdingRegister[THERMOSTAT_TEMP] < holdingRegister[MIN_FLOOR_TEMP]) {
+    holdingRegister[THERMOSTAT_TEMP] = holdingRegister[MIN_FLOOR_TEMP];
+  }
   setOutput(THERMOSTAT_LED_PIN, holdingRegister[THERMOSTAT_ON]);
   if (!holdingRegister[THERMOSTAT_ON]) {
     outputState[THERMOSTAT_STATE] = LOW;
     setOutput(THERMOSTAT_OUTPUT_PIN, outputState[THERMOSTAT_STATE]);
   }
+
+  EEPROM.put(THERMOSTAT_ON_EEPROM, holdingRegister[THERMOSTAT_ON]);
+  EEPROM.put(THERMOSTAT_TEMP_EEPROM, holdingRegister[THERMOSTAT_TEMP]);
+  EEPROM.put(MIN_FLOOR_TEMP_EEPROM, holdingRegister[MIN_FLOOR_TEMP]);
+  EEPROM.put(MAX_FLOOR_TEMP_EEPROM, holdingRegister[MAX_FLOOR_TEMP]);
+  
   return STATUS_OK;
 }
 
 void setup() {
+  loadData();
   initButtons();
   initI2C();
   initHTU21D();

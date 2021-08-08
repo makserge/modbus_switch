@@ -89,7 +89,7 @@ const uint8_t HOLDING_COUNT = 7;
 
 uint8_t outputState[8] = { LOW, LOW, LOW, LOW, LOW, LOW, LOW, LOW }; //{ BATH_FAN, TOILET_FAN, BATH_LIGHT, TOILET_LIGHT, BOILER, HEAT1, HEAT2, HEAT3 }
 uint16_t inputRegister[INPUT_COUNT] = { 0, 0, 0, 0 }; //{ TOILET_PRESENCE, TOILET_TEMP, BATHROOM_TEMP, BATHROOM_HUMIDITY }
-uint16_t holdingRegister[HOLDING_COUNT] = { 55, 1, 7, 1, 15, 55, 1 }; //{ BATH_LIGHT_LEVEL, BATH_FAN_AUTO, BATH_FAN_TOLERANCE, TOILET_FAN_AUTO, TOILET_FAN_DELAY, TOILET_LIGHT_LEVEL, TOILET_LIGHT_AUTO }
+uint16_t holdingRegister[HOLDING_COUNT] = { 100, 1, 7, 1, 15, 100, 1 }; //{ BATH_LIGHT_LEVEL, BATH_FAN_AUTO, BATH_FAN_TOLERANCE, TOILET_FAN_AUTO, TOILET_FAN_DELAY, TOILET_LIGHT_LEVEL, TOILET_LIGHT_AUTO }
 
 uint8_t pcfInputState[4] = { HIGH, HIGH, HIGH, HIGH };
 
@@ -112,18 +112,18 @@ uint16_t toiletFanRuleCounter = 0;
 
 const uint8_t FAN_DELAY_MINUTE = 200;//ticks per minute for 300ms timer
 
-const uint8_t PWM_OUTPUT_STEPS = 55;
-const uint8_t PWM_OUTPUT_LOG[56] =
-{ 100, 97, 94, 91, 88, 85, 82, 79, 76, 74, 71, 69, 66, 63, 61, 59,
-  56, 54, 52, 50, 48, 46, 44, 42, 40, 38, 36, 34, 32, 30, 28, 26, 25, 24, 23, 22, 20,
-  19, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
+const uint8_t PWM_OUTPUT_STEPS = 100;
+const uint8_t PWM_OUTPUT_LOG[101] =
+{ 100, 100, 97, 97, 94, 94, 91, 91, 88, 88, 85, 85, 82, 82, 79, 79, 76, 76, 74, 74, 71, 71, 69, 69, 66, 66, 63, 63, 61, 61, 59, 59,
+  56, 56, 54, 54, 52, 52, 50, 50, 48, 48, 46, 46, 44, 44, 42, 42, 40, 40, 38, 38, 36, 36, 34, 34, 32, 32, 30, 30, 28, 28, 26, 26, 25, 25, 24, 24, 23, 23, 22, 22, 20, 20,
+  19, 19, 17, 17, 16, 16, 15, 15, 14, 14, 13, 13, 12, 12, 11, 11, 10, 10, 9, 9, 8, 8, 7, 7, 6, 6, 5
 };
 
 Modbus slave(SLAVE_ID, RS485_TX_ENABLE_PIN);
 OneButton bathFanButton(INPUT1_PIN, true, false);
 OneButton toiletFanButton(INPUT2_PIN, true, false);
 OneButton bathLightButton(INPUT3_PIN, true, false);
-OneButton toliletLightButton(INPUT4_PIN, true, false);
+OneButton toiletLightButton(INPUT4_PIN, true, false);
 HardwareTimer *bathTimer;
 HardwareTimer *toiletTimer;
 OneWire ds(DS18B20_PIN);
@@ -248,7 +248,7 @@ void initButtons() {
   bathFanButton.attachClick(clickBathFanButton);
   toiletFanButton.attachClick(clickToiletFanButton);
   bathLightButton.attachClick(clickBathLightButton);
-  toliletLightButton.attachClick(clickToiletLightButton);
+  toiletLightButton.attachClick(clickToiletLightButton);
 }
 
 uint8_t checkCRC8(uint16_t data) {
@@ -560,8 +560,8 @@ void initPCF8574() {
  * Handle Read Input Registers (FC=04)
  */
 uint8_t readInputRegister(uint8_t fc, uint16_t address, uint16_t length) {
-  for (uint16_t i = 0; i < INPUT_COUNT; i++) {
-    slave.writeRegisterToBuffer(i, inputRegister[i]);
+  for (uint16_t i = 0; i < length; i++) {
+    slave.writeRegisterToBuffer(i, inputRegister[i + address]);
   }
   return STATUS_OK;
 }
@@ -570,8 +570,8 @@ uint8_t readInputRegister(uint8_t fc, uint16_t address, uint16_t length) {
  * Handle Read Holding Registers (FC=03)
  */
 uint8_t readHolding(uint8_t fc, uint16_t address, uint16_t length) {
-  for (uint16_t i = 0; i < HOLDING_COUNT; i++) {
-    slave.writeRegisterToBuffer(i, holdingRegister[i]);
+  for (uint16_t i = 0; i < length; i++) {
+    slave.writeRegisterToBuffer(i, holdingRegister[i + address]);
   }
   return STATUS_OK;
 }
@@ -660,7 +660,7 @@ void loop() {
   bathFanButton.tick(pcfInputState[BATH_FAN] == LOW);
   toiletFanButton.tick(pcfInputState[TOILET_FAN] == LOW);
   bathLightButton.tick(pcfInputState[BATH_LIGHT] == LOW);
-  toliletLightButton.tick(pcfInputState[TOILET_LIGHT] == LOW);
+  toiletLightButton.tick(pcfInputState[TOILET_LIGHT] == LOW);
   
   slave.poll();
   

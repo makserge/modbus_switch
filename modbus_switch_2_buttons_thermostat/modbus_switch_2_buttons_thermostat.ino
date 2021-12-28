@@ -42,34 +42,56 @@ const uint8_t OUT1_STATE = 0;
 const uint8_t OUT2_STATE = 1;
 const uint8_t THERMOSTAT_STATE = 2;
 
+const uint8_t FLOOR_TEMP = 0;
+const uint8_t AIR_TEMP = 1;
+const uint8_t HUMIDITY = 2;
+
 const uint8_t THERMOSTAT_ON = 0;
 const uint8_t THERMOSTAT_TEMP = 1;
 const uint8_t MIN_FLOOR_TEMP = 2;
 const uint8_t MAX_FLOOR_TEMP = 3;
-const uint8_t FLOOR_TEMP = 4;
-const uint8_t AIR_TEMP = 5;
-const uint8_t HUMIDITY = 6;
+const uint8_t HYST_TEMP = 4;
 
 const uint8_t THERMOSTAT_ON_EEPROM = 10;
 const uint8_t THERMOSTAT_TEMP_EEPROM = 20;
 const uint8_t MIN_FLOOR_TEMP_EEPROM = 30;
 const uint8_t MAX_FLOOR_TEMP_EEPROM = 40;
+const uint8_t HYST_TEMP_EEPROM = 50;
 
 const uint8_t PERIODICAL_TIMER_FREQUENCY = 1; //1HZ
 const uint32_t WATCHDOG_TIMEOUT = 10000000; //10s
 
-const uint8_t HOLDING_COUNT = 7;
+const uint8_t HOLDING_COUNT = 5;
 
 uint8_t outputState[3] = { LOW, LOW, LOW }; //{ OUT1_STATE, OUT2_STATE, THERMOSTAT_STATE }
-uint16_t holdingRegister[HOLDING_COUNT] = { 0, 25, 20, 40, 0, 0, 0 }; //{ THERMOSTAT_ON, THERMOSTAT_TEMP, MIN_FLOOR_TEMP, MAX_FLOOR_TEMP, FLOOR_TEMP, AIR_TEMP, HUMIDITY }
+uint16_t inputRegister[3] = { 0, 0, 0 }; //{ FLOOR_TEMP, AIR_TEMP, HUMIDITY }
+uint16_t holdingRegister[HOLDING_COUNT] = { 0, 25, 20, 40, 1 }; //{ THERMOSTAT_ON, THERMOSTAT_TEMP, MIN_FLOOR_TEMP, MAX_FLOOR_TEMP, HYST_TEMP }
 
 float floorTemp, airTemp;
+uint8_t ledStatus = LOW;
 
 Modbus slave(SLAVE_ID, RS485_TX_ENABLE_PIN);
 OneButton button1(INPUT1_PIN, true, false);
 OneButton button2(INPUT2_PIN, true, false);
 OneButton thermostatButton(THERMOSTAT_ON_PIN, true, false);
 OneWire ds(DS18B20_PIN);
+
+// Handle the function code Read Input Registers (FC=04) and write back the values from analog input pins (input registers).
+uint8_t readAnalogIn(uint8_t fc, uint16_t address, uint16_t length) {
+    for (int i = 0; i < length; i++) {
+        slave.writeRegisterToBuffer(i, inputRegister[i + address]);
+    }
+    return STATUS_OK;
+}
+
+void updateLed() {
+  if (outputState[THERMOSTAT_STATE]) {
+    ledStatus = !ledStatus;   
+  } else {
+    ledStatus = holdingRegister[THERMOSTAT_ON];
+  }
+  setOutput(THERMOSTAT_LED_PIN, ledStatus);
+}
 
 uint8_t readDigitalOut(uint8_t fc, uint16_t address, uint16_t length) {
   for (int i = 0; i < length; i++) {
@@ -134,12 +156,13 @@ void loadData() {
     EEPROM.put(THERMOSTAT_TEMP_EEPROM, holdingRegister[THERMOSTAT_TEMP]);
     EEPROM.put(MIN_FLOOR_TEMP_EEPROM, holdingRegister[MIN_FLOOR_TEMP]);
     EEPROM.put(MAX_FLOOR_TEMP_EEPROM, holdingRegister[MAX_FLOOR_TEMP]);
+    EEPROM.put(HYST_TEMP_EEPROM, holdingRegister[HYST_TEMP]);
   }
-
   EEPROM.get(THERMOSTAT_ON_EEPROM, holdingRegister[THERMOSTAT_ON]);
   EEPROM.get(THERMOSTAT_TEMP_EEPROM, holdingRegister[THERMOSTAT_TEMP]);
   EEPROM.get(MIN_FLOOR_TEMP_EEPROM, holdingRegister[MIN_FLOOR_TEMP]);
   EEPROM.get(MAX_FLOOR_TEMP_EEPROM, holdingRegister[MAX_FLOOR_TEMP]);
+  EEPROM.get(HYST_TEMP_EEPROM, holdingRegister[HYST_TEMP]);
 }
 
 void initButtons() {
@@ -276,24 +299,30 @@ float readDS() {
 
 void updateSensors() {
   airTemp = readTemperature();
-  holdingRegister[AIR_TEMP] = airTemp * 10;
-  holdingRegister[HUMIDITY] = readCompensatedHumidity(airTemp);
+  inputRegister[AIR_TEMP] = airTemp * 10;
+  inputRegister[HUMIDITY] = readCompensatedHumidity(airTemp);
   
   floorTemp = readDS();
   
   if (floorTemp == 85) {//initial value
     return;
   }
-  holdingRegister[FLOOR_TEMP] = floorTemp * 10;
+  inputRegister[FLOOR_TEMP] = floorTemp * 10;
  
   if (holdingRegister[THERMOSTAT_ON]) {
-    if ((floorTemp <= holdingRegister[MAX_FLOOR_TEMP]) && (airTemp < holdingRegister[THERMOSTAT_TEMP])) {
-      outputState[THERMOSTAT_STATE] = 1;
-    } else {
-      outputState[THERMOSTAT_STATE] = 0;
+    if (outputState[THERMOSTAT_STATE]) {
+      if ((floorTemp >= holdingRegister[MAX_FLOOR_TEMP]) || (airTemp >= holdingRegister[THERMOSTAT_TEMP])) {
+        outputState[THERMOSTAT_STATE] = 0;
+        setOutput(THERMOSTAT_OUTPUT_PIN, outputState[THERMOSTAT_STATE]);
+      }  
+    } else {  
+      if (airTemp <= holdingRegister[THERMOSTAT_TEMP] - holdingRegister[HYST_TEMP]) {
+        outputState[THERMOSTAT_STATE] = 1;
+        setOutput(THERMOSTAT_OUTPUT_PIN, outputState[THERMOSTAT_STATE]);
+      }
     }
-    setOutput(THERMOSTAT_OUTPUT_PIN, outputState[THERMOSTAT_STATE]);
   }
+  updateLed();
 }
  
 void initI2C() {
@@ -346,7 +375,6 @@ uint8_t writeHolding(uint8_t fc, uint16_t address, uint16_t length) {
   } else if (holdingRegister[THERMOSTAT_TEMP] < holdingRegister[MIN_FLOOR_TEMP]) {
     holdingRegister[THERMOSTAT_TEMP] = holdingRegister[MIN_FLOOR_TEMP];
   }
-  setOutput(THERMOSTAT_LED_PIN, holdingRegister[THERMOSTAT_ON]);
   if (!holdingRegister[THERMOSTAT_ON]) {
     outputState[THERMOSTAT_STATE] = LOW;
     setOutput(THERMOSTAT_OUTPUT_PIN, outputState[THERMOSTAT_STATE]);
@@ -356,6 +384,7 @@ uint8_t writeHolding(uint8_t fc, uint16_t address, uint16_t length) {
   EEPROM.put(THERMOSTAT_TEMP_EEPROM, holdingRegister[THERMOSTAT_TEMP]);
   EEPROM.put(MIN_FLOOR_TEMP_EEPROM, holdingRegister[MIN_FLOOR_TEMP]);
   EEPROM.put(MAX_FLOOR_TEMP_EEPROM, holdingRegister[MAX_FLOOR_TEMP]);
+  EEPROM.put(HYST_TEMP_EEPROM, holdingRegister[HYST_TEMP]);
   
   return STATUS_OK;
 }
@@ -370,6 +399,7 @@ void setup() {
 
   slave.cbVector[CB_READ_COILS] = readDigitalOut;
   slave.cbVector[CB_WRITE_COILS] = writeDigitalOut;
+  slave.cbVector[CB_READ_INPUT_REGISTERS] = readAnalogIn;
   slave.cbVector[CB_READ_HOLDING_REGISTERS] = readHolding;
   slave.cbVector[CB_WRITE_HOLDING_REGISTERS] = writeHolding;
 

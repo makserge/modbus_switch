@@ -311,12 +311,12 @@ void updateSensors() {
  
   if (holdingRegister[THERMOSTAT_ON]) {
     if (outputState[THERMOSTAT_STATE]) {
-      if ((floorTemp >= holdingRegister[MAX_FLOOR_TEMP]) || (airTemp >= holdingRegister[THERMOSTAT_TEMP])) {
+      if (floorTemp >= holdingRegister[THERMOSTAT_TEMP]) {
         outputState[THERMOSTAT_STATE] = 0;
         setOutput(THERMOSTAT_OUTPUT_PIN, outputState[THERMOSTAT_STATE]);
       }  
     } else {  
-      if (airTemp <= holdingRegister[THERMOSTAT_TEMP] - holdingRegister[HYST_TEMP]) {
+      if (floorTemp <= holdingRegister[THERMOSTAT_TEMP] - holdingRegister[HYST_TEMP]) {
         outputState[THERMOSTAT_STATE] = 1;
         setOutput(THERMOSTAT_OUTPUT_PIN, outputState[THERMOSTAT_STATE]);
       }

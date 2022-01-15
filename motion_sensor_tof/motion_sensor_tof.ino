@@ -6,10 +6,10 @@
 #define PIR_PIN PA0
 #define OUTPUT_PIN PB1
 
-const uint16_t TOF_THRESHOLD = 2000;
+const uint16_t TOF_THRESHOLD = 1300;
 
-const uint16_t PIR_OPEN_TIMEOUT = 600; //1 min
-const uint8_t PIR_CLOSE_TIMEOUT = 150; //15s
+const uint16_t PIR_OPEN_TIMEOUT = 200; //1 min
+const uint8_t PIR_CLOSE_TIMEOUT = 50; //15s
 const uint32_t WATCHDOG_TIMEOUT = 10000000; //10s
 
 uint16_t pirOpenTimer = 0;
@@ -33,6 +33,8 @@ void initPIR() {
 }
 
 void initTOF() {
+  Wire.setSDA(PA10);
+  Wire.setSCL(PA9);
   Wire.begin();
   Wire.setClock(400000);
 
@@ -41,25 +43,15 @@ void initTOF() {
     while (1);
   }
   
-  // Use long distance mode and allow up to 50000 us (50 ms) for a measurement.
-  // You can change these settings to adjust the performance of the sensor, but
-  // the minimum timing budget is 20 ms for short distance mode and 33 ms for
-  // medium and long distance modes. See the VL53L1X datasheet for more
-  // information on range and timing limits.
   tofSensor.setDistanceMode(VL53L1X::Long);
   tofSensor.setMeasurementTimingBudget(50000);
-
-  // Start continuous readings at a rate of one measurement every 50 ms (the
-  // inter-measurement period). This period should be at least as long as the
-  // timing budget.
   tofSensor.startContinuous(50);  
 }
 
 void updateSensors() {
   uint8_t pirState = digitalRead(PIR_PIN);
   uint16_t tofDistance = tofSensor.read(true);
- 
-  if (tofDistance < TOF_THRESHOLD) {
+  if (tofDistance > TOF_THRESHOLD) {
     pirMovementClosed = LOW;
     pirClosedTimer = PIR_CLOSE_TIMEOUT;
     if (pirState) {
@@ -74,11 +66,11 @@ void updateSensors() {
     }
   } else {
     pirOpenTimer = PIR_OPEN_TIMEOUT;
-    if (pirClosedTimer >0) {
-      pirClosedTimer--;
+    if (pirMovementClosed) {
       return;
     }
-    if (pirMovementClosed) {
+    if (pirClosedTimer >0) {
+      pirClosedTimer--;
       return;
     }
     if (pirState) {
@@ -101,6 +93,6 @@ void setup() {
 
 void loop() {
   updateSensors();
-  delay(100);
+  delay(300);
   IWatchdog.reload();
 }

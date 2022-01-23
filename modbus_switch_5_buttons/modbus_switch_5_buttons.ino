@@ -170,7 +170,7 @@ void setOutput(uint8_t out) {
   value = outputState[out];
   digitalWrite(pin, value);
   if (pcfPin != 254) {
-    pcf8574.digitalWrite(pcfPin, value);
+    pcf8574.digitalWrite(pcfPin, !value);
   }  
 }
 
@@ -549,10 +549,10 @@ void initPCF8574() {
   pcf8574.pinMode(PCF_TOILET_LIGHT_OUTPUT_PIN, OUTPUT);
 
   if (pcf8574.begin()) {
-    pcf8574.digitalWrite(PCF_BATH_FAN_OUTPUT_PIN, LOW);
-    pcf8574.digitalWrite(PCF_TOILET_FAN_OUTPUT_PIN, LOW);
-    pcf8574.digitalWrite(PCF_BATH_LIGHT_OUTPUT_PIN, LOW);
-    pcf8574.digitalWrite(PCF_TOILET_LIGHT_OUTPUT_PIN, LOW);
+    pcf8574.digitalWrite(PCF_BATH_FAN_OUTPUT_PIN, HIGH);
+    pcf8574.digitalWrite(PCF_TOILET_FAN_OUTPUT_PIN, HIGH);
+    pcf8574.digitalWrite(PCF_BATH_LIGHT_OUTPUT_PIN, HIGH);
+    pcf8574.digitalWrite(PCF_TOILET_LIGHT_OUTPUT_PIN, HIGH);
   }
 }
 

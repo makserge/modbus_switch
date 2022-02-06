@@ -81,7 +81,7 @@ const uint8_t TOILET_TEMP = 1;
 const uint8_t BATHROOM_TEMP = 2;
 const uint8_t BATHROOM_HUMIDITY = 3;
 
-const uint32_t PERIODICAL_TIMER_FREQUENCY = 300000; //300ms
+const uint32_t PERIODICAL_TIMER_FREQUENCY = 150000; //150ms
 const uint32_t WATCHDOG_TIMEOUT = 10000000; //10s
 
 const uint8_t INPUT_COUNT = 4;
@@ -89,7 +89,7 @@ const uint8_t HOLDING_COUNT = 7;
 
 uint8_t outputState[8] = { LOW, LOW, LOW, LOW, LOW, LOW, LOW, LOW }; //{ BATH_FAN, TOILET_FAN, BATH_LIGHT, TOILET_LIGHT, BOILER, HEAT1, HEAT2, HEAT3 }
 uint16_t inputRegister[INPUT_COUNT] = { 0, 0, 0, 0 }; //{ TOILET_PRESENCE, TOILET_TEMP, BATHROOM_TEMP, BATHROOM_HUMIDITY }
-uint16_t holdingRegister[HOLDING_COUNT] = { 100, 1, 7, 1, 15, 100, 1 }; //{ BATH_LIGHT_LEVEL, BATH_FAN_AUTO, BATH_FAN_TOLERANCE, TOILET_FAN_AUTO, TOILET_FAN_DELAY, TOILET_LIGHT_LEVEL, TOILET_LIGHT_AUTO }
+uint16_t holdingRegister[HOLDING_COUNT] = { 100, 1, 7, 1, 5, 100, 1 }; //{ BATH_LIGHT_LEVEL, BATH_FAN_AUTO, BATH_FAN_TOLERANCE, TOILET_FAN_AUTO, TOILET_FAN_DELAY, TOILET_LIGHT_LEVEL, TOILET_LIGHT_AUTO }
 
 uint8_t pcfInputState[4] = { HIGH, HIGH, HIGH, HIGH };
 
@@ -110,7 +110,7 @@ uint8_t toiletLightLastState = LOW;
 uint8_t isToiletFanAutoOn = LOW;
 uint16_t toiletFanRuleCounter = 0;
 
-const uint8_t FAN_DELAY_MINUTE = 200;//ticks per minute for 300ms timer
+const uint16_t FAN_DELAY_MINUTE = 400;//ticks per minute for 150ms timer
 
 const uint8_t PWM_OUTPUT_STEPS = 100;
 const uint8_t PWM_OUTPUT_LOG[101] =
@@ -501,7 +501,7 @@ void updateSensors() {
 
   getBathTempHumidity();
 
-  delay(20);
+  delay(10);
 
   pcfInputState[BATH_FAN] = pcf8574.digitalRead(PCF_BATH_FAN_INPUT_PIN);
   pcfInputState[TOILET_FAN] = pcf8574.digitalRead(PCF_TOILET_FAN_INPUT_PIN);

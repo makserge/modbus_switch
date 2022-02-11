@@ -270,21 +270,24 @@ float readTemperature() {
   Wire.beginTransmission(HTU21D_I2C_ADDRESS);
   Wire.write(HTU21D_TRIGGER_TEMP_MEASURE_HOLD);
   if (Wire.endTransmission(true) != 0) {
-    return I2C_ERROR;
+    resetI2C();
+    return 0;
   }
 
   delay(22);
 
   Wire.requestFrom(HTU21D_I2C_ADDRESS, 3);
   if (Wire.available() != 3) {
-    return I2C_ERROR;
+    resetI2C();
+    return 0;
   }
   rawTemperature = Wire.read() << 8;
   rawTemperature |= Wire.read();
   checksum = Wire.read();
   
   if (checkCRC8(rawTemperature) != checksum) {
-    return I2C_ERROR;
+    resetI2C();
+    return 0;
   }
   return (0.002681 * (float)rawTemperature - 46.85);
 }
@@ -297,12 +300,14 @@ float readHumidity() {
   Wire.beginTransmission(HTU21D_I2C_ADDRESS);
   Wire.write(HTU21D_TRIGGER_HUMD_MEASURE_HOLD);
   if (Wire.endTransmission(true) != 0) {
-    return I2C_ERROR;
+    resetI2C();
+    return 0;
   }
   delay(4);
   Wire.requestFrom(HTU21D_I2C_ADDRESS, 3);
   if (Wire.available() != 3) {
-    return I2C_ERROR;
+    resetI2C();
+    return 0;
   }
 
   rawHumidity = Wire.read() << 8;
@@ -310,7 +315,8 @@ float readHumidity() {
   checksum = Wire.read();
  
   if (checkCRC8(rawHumidity) != checksum) {
-    return I2C_ERROR;
+    resetI2C();
+    return 0;
   }
 
   rawHumidity ^= 0x02;
@@ -510,7 +516,13 @@ void updateSensors() {
 
   processRules();
 }
- 
+
+
+void resetI2C() {
+  Wire.end();
+  initI2C();
+}
+
 void initI2C() {
   Wire.setSDA(I2C_SDA);
   Wire.setSCL(I2C_SCL);
